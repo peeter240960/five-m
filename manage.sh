@@ -1,20 +1,20 @@
 #!/bin/bash
 
 # ============================================================
-#  FiveM Server Management Script (Dev & Pro)
+#  FiveM Server Management Script (With Firewall Control)
 # ============================================================
 
 CONTAINER_NAME="FiveM"
 LICENSE_KEY="cfxk_FISfOgTNULuVnW73OPpX_1TSdvN"
 IMAGE="spritsail/fivem"
 
-# ดึง Path ปัจจุบัน
+# Path Setup
 BASE_DIR=$(pwd)
 CONFIG_DIR="$BASE_DIR/config"
 TXDATA_DIR="$BASE_DIR/txData"
 RESOURCE_DIR="$BASE_DIR/resources"
 
-# สีสำหรับแสดงผล
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -22,105 +22,66 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 # ============================================================
-#  Functions
+#  Core Functions
 # ============================================================
 
 setup() {
-    echo -e "${CYAN}[*] เริ่มต้นตั้งค่าโครงสร้างโฟลเดอร์...${NC}"
-    
-    # สร้างโฟลเดอร์ที่จำเป็น
+    echo -e "${CYAN}[*] เริ่มต้นตั้งค่าโครงสร้าง...${NC}"
     mkdir -p "$CONFIG_DIR" "$TXDATA_DIR" "$RESOURCE_DIR"
-    
-    # สร้าง server.cfg พื้นฐานถ้ายังไม่มี
-    if [ ! -f "$CONFIG_DIR/server.cfg" ]; then
-        echo -e "${YELLOW}[!] ไม่พบ server.cfg กำลังสร้างไฟล์เริ่มต้นให้...${NC}"
-        cat <<EOT > "$CONFIG_DIR/server.cfg"
-# Basic FiveM Config
-endpoint_add_tcp "0.0.0.0:30120"
-endpoint_add_udp "0.0.0.0:30120"
-
-ensure mapmanager
-ensure chat
-ensure spawnmanager
-ensure sessionmanager
-ensure fivem
-
-# Your Scripts
-ensure my_inventory
-EOT
-    fi
-
-    # ตั้งสิทธิ์ไฟล์ (สำคัญมากสำหรับ Docker Linux)
     sudo chmod -R 777 "$BASE_DIR"
-    
-    echo -e "${GREEN}[✓] Setup เรียบร้อย! กรุณาตรวจสอบ License Key ในไฟล์ manage.sh ก่อนรัน${NC}"
+    echo -e "${GREEN}[✓] Setup เรียบร้อย${NC}"
 }
 
 up() {
-    echo -e "${CYAN}[*] กำลังเริ่ม FiveM Container...${NC}"
-
-    # ลบคอนเทนเนอร์เก่า (ถ้ามี)
+    echo -e "${CYAN}[*] กำลังเริ่ม FiveM...${NC}"
     if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
         docker rm -f "$CONTAINER_NAME"
     fi
 
-    # รัน Docker พร้อม Mapping โฟลเดอร์
     docker run -d \
         --name "$CONTAINER_NAME" \
         --restart=always \
         -e LICENSE_KEY="$LICENSE_KEY" \
-        -p 30120:30120 \
-        -p 30120:30120/udp \
-        -p 40120:40120 \
+        -p 30120:30120 -p 30120:30120/udp -p 40120:40120 \
         -v "$CONFIG_DIR":/config \
         -v "$TXDATA_DIR":/txData \
         -v "$RESOURCE_DIR":/config/resources \
-        -ti \
-        "$IMAGE"
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}==============================================${NC}"
-        echo -e "${GREEN}[✓] FiveM Server กำลังทำงาน!${NC}"
-        echo -e "${CYAN} - Game Port: 30120${NC}"
-        echo -e "${CYAN} - txAdmin Port: 40120${NC}"
-        echo -e "${CYAN} - Connect: localhost:30120 (ในเกม)${NC}"
-        echo -e "${GREEN}==============================================${NC}"
-    else
-        echo -e "${RED}[✗] ไม่สามารถเริ่ม FiveM ได้ กรุณาเช็ค Docker Log${NC}"
-    fi
+        -ti "$IMAGE"
+    
+    echo -e "${GREEN}[✓] FiveM Online!${NC}"
 }
 
 down() {
     echo -e "${YELLOW}[*] กำลังหยุด FiveM...${NC}"
     docker stop "$CONTAINER_NAME" && docker rm "$CONTAINER_NAME"
-    echo -e "${GREEN}[✓] หยุดและลบ Container เรียบร้อย${NC}"
+    echo -e "${GREEN}[✓] หยุดเรียบร้อย${NC}"
 }
 
-logs() {
-    docker logs -f "$CONTAINER_NAME"
+# ============================================================
+#  Firewall Management (UFW)
+# ============================================================
+
+fw_open() {
+    echo -e "${CYAN}[*] กำลังเปิดพอร์ต Firewall (30120, 40120)...${NC}"
+    sudo ufw allow 30120/tcp
+    sudo ufw allow 30120/udp
+    sudo ufw allow 40120/tcp
+    sudo ufw reload
+    echo -e "${GREEN}[✓] เปิดพอร์ตเรียบร้อยแล้ว${NC}"
 }
 
-firewall_open() {
-  echo -e "${YELLOW}[*] เปิด Firewall ports สำหรับ FiveM...${NC}"
-  sudo ufw allow 30120/tcp
-  sudo ufw allow 30120/udp
-  sudo ufw allow 40120/tcp
-  sudo ufw reload
-  echo -e "${GREEN}[✓] Firewall เปิดแล้ว${NC}"
+fw_close() {
+    echo -e "${RED}[*] กำลังปิดพอร์ต Firewall...${NC}"
+    sudo ufw delete allow 30120/tcp
+    sudo ufw delete allow 30120/udp
+    sudo ufw delete allow 40120/tcp
+    sudo ufw reload
+    echo -e "${YELLOW}[✓] ปิดพอร์ตเรียบร้อยแล้ว${NC}"
 }
 
-firewall_close() {
-  echo -e "${YELLOW}[*] ปิด Firewall ports สำหรับ FiveM...${NC}"
-  sudo ufw delete allow 30120/tcp
-  sudo ufw delete allow 30120/udp
-  sudo ufw delete allow 40120/tcp
-  sudo ufw reload
-  echo -e "${GREEN}[✓] Firewall ปิดแล้ว${NC}"
-}
-
-firewall_status() {
-  echo -e "${YELLOW}[*] สถานะ Firewall:${NC}"
-  sudo ufw status numbered
+fw_status() {
+    echo -e "${CYAN}[*] สถานะ Firewall ปัจจุบัน:${NC}"
+    sudo ufw status numbered
 }
 
 # ============================================================
@@ -128,12 +89,15 @@ firewall_status() {
 # ============================================================
 
 case "$1" in
-    setup)   setup ;;
-    up)      up ;;
-    down)    down ;;
-    restart) down; up ;;
-    logs)    logs ;;
+    setup)          setup ;;
+    up)             up ;;
+    down)           down ;;
+    restart)        down; up ;;
+    logs)           docker logs -f "$CONTAINER_NAME" ;;
+    fw:open)        fw_open ;;
+    fw:close)       fw_close ;;
+    fw:status)      fw_status ;;
     *)
-        echo "วิธีใช้: $0 {setup|up|down|restart|logs}"
+        echo "วิธีใช้: $0 {setup|up|down|restart|logs|fw:open|fw:close|fw:status}"
         exit 1
 esac
