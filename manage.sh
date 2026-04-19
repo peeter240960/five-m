@@ -100,6 +100,29 @@ logs() {
     docker logs -f "$CONTAINER_NAME"
 }
 
+firewall_open() {
+  echo -e "${YELLOW}[*] เปิด Firewall ports สำหรับ FiveM...${NC}"
+  sudo ufw allow 30120/tcp
+  sudo ufw allow 30120/udp
+  sudo ufw allow 40120/tcp
+  sudo ufw reload
+  echo -e "${GREEN}[✓] Firewall เปิดแล้ว${NC}"
+}
+
+firewall_close() {
+  echo -e "${YELLOW}[*] ปิด Firewall ports สำหรับ FiveM...${NC}"
+  sudo ufw delete allow 30120/tcp
+  sudo ufw delete allow 30120/udp
+  sudo ufw delete allow 40120/tcp
+  sudo ufw reload
+  echo -e "${GREEN}[✓] Firewall ปิดแล้ว${NC}"
+}
+
+firewall_status() {
+  echo -e "${YELLOW}[*] สถานะ Firewall:${NC}"
+  sudo ufw status numbered
+}
+
 # ============================================================
 #  Main Logic
 # ============================================================
